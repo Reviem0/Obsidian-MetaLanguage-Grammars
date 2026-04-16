@@ -1,0 +1,10 @@
+{
+  "id": "metalanguage-grammars",
+  "name": "Metalanguage Grammars",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Syntax highlighting for ABNF, BNF, EBNF, and LBNF in fenced code blocks. Ported from Alhadis/language-grammars.",
+  "author": "Ported from Alhadis/language-grammars (ISC)",
+  "authorUrl": "https://github.com/Alhadis/language-grammars",
+  "isDesktopOnly": false
+}

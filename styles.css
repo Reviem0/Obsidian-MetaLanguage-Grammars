@@ -1,0 +1,134 @@
+/*
+ * Obsidian plugin: Metalanguage Grammars.
+ * Token colors are expressed in terms of Obsidian's theme variables so
+ * the plugin respects light / dark mode and user-installed themes.
+ *
+ * Class naming follows Prism conventions: `.token.<alias>` plus
+ * `.language-<id>` selectors when we need language-specific tuning.
+ */
+
+/* ---------- Shared token palette ---------- */
+
+/* Rule names (LHS) — the "headings" of a grammar. */
+.language-abnf .token.entity,
+.language-bnf  .token.entity,
+.language-ebnf .token.entity,
+.language-lbnf .token.entity,
+.language-abnf .token.rule,
+.language-bnf  .token.rule,
+.language-ebnf .token.rule,
+.language-lbnf .token.label {
+	color: var(--color-purple);
+	font-weight: 600;
+}
+
+/* References to rules (RHS usage). */
+.language-abnf .token.reference,
+.language-bnf  .token.non-terminal,
+.language-ebnf .token.reference,
+.language-lbnf .token.reference,
+.language-lbnf .token.non-terminal {
+	color: var(--color-blue);
+}
+
+.language-lbnf .token.non-terminal .token.number {
+	color: var(--text-faint);
+	font-weight: normal;
+}
+
+/* Core / built-in categories (ABNF core rules, LBNF built-ins). */
+.language-abnf .token.core-rule,
+.language-abnf .token.constant,
+.language-lbnf .token.builtin-category,
+.language-lbnf .token.constant {
+	color: var(--color-cyan);
+	font-weight: 500;
+}
+
+/* Numeric terminals and quantifiers. */
+.language-abnf .token.terminal,
+.language-abnf .token.number,
+.language-bnf  .token.number,
+.language-ebnf .token.number,
+.language-lbnf .token.number {
+	color: var(--color-orange);
+}
+
+.language-abnf .token.terminal .token.punctuation,
+.language-abnf .token.terminal .token.keyword {
+	color: var(--color-red);
+}
+
+.language-abnf .token.terminal .token.number {
+	color: var(--color-orange);
+}
+
+.language-abnf .token.quantifier {
+	color: var(--color-red);
+	font-weight: 600;
+}
+
+/* Literal strings. */
+.language-abnf .token.string,
+.language-bnf  .token.string,
+.language-ebnf .token.string,
+.language-lbnf .token.string {
+	color: var(--color-green);
+}
+
+/* ABNF case-sensitive string prefix %s"…" gets a subtle tag. */
+.language-abnf .token.string.string-sensitive {
+	color: var(--color-green);
+	font-style: italic;
+}
+
+/* ABNF prose <free text>. */
+.language-abnf .token.prose {
+	color: var(--color-yellow);
+	font-style: italic;
+}
+
+/* EBNF ? special sequence ?. */
+.language-ebnf .token.special-sequence {
+	color: var(--color-yellow);
+	font-style: italic;
+}
+
+/* Operators — assignment, alternation, concat, exception. */
+.language-abnf .token.operator,
+.language-bnf  .token.operator,
+.language-ebnf .token.operator,
+.language-lbnf .token.operator {
+	color: var(--color-pink);
+	font-weight: 500;
+}
+
+/* Comments. */
+.language-abnf .token.comment,
+.language-bnf  .token.comment,
+.language-ebnf .token.comment,
+.language-lbnf .token.comment {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* Brackets / parens / braces stay subtle — Obsidian's default is fine,
+   but we bump contrast very slightly. */
+.language-abnf .token.punctuation,
+.language-bnf  .token.punctuation,
+.language-ebnf .token.punctuation,
+.language-lbnf .token.punctuation {
+	color: var(--text-muted);
+}
+
+/* LBNF pragma keywords. */
+.language-lbnf .token.keyword {
+	color: var(--color-red);
+	font-weight: 600;
+}
+
+/* BNF's angle brackets around non-terminals shouldn't disappear entirely. */
+.language-bnf .token.non-terminal .token.punctuation,
+.language-bnf .token.rule .token.punctuation {
+	color: var(--text-faint);
+}
