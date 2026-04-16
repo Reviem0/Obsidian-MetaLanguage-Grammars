@@ -96,9 +96,22 @@ var abnf = {
 };
 
 // src/grammars/bnf.ts
+var META_CLASS = "[A-Za-z\\u0370-\\u03FF\\u2100-\\u214F\\u{1D400}-\\u{1D7FF}]";
+var META_SUFFIX = "(?:['\\u2032]|[\\u2080-\\u2089]|_[0-9])*";
+var METAVAR_RE = new RegExp(
+  `(?<!${META_CLASS})${META_CLASS}${META_SUFFIX}(?!${META_CLASS})`,
+  "u"
+);
+var RULE_META_RE = new RegExp(
+  `(^|\\n)[ \\t]*${META_CLASS}${META_SUFFIX}(?=[ \\t]*::?=)`,
+  "u"
+);
+var KEYWORD_RE = new RegExp(
+  `${META_CLASS}(?:${META_CLASS}|[0-9_\\-]){1,}`,
+  "u"
+);
 var bnf = {
-  // Line comments are not part of standard BNF but `;` and `#` are used
-  // in various dialects. We accept both defensively.
+  // Line comments: `;` (traditional) and `//` (common in modern dialects).
   comment: [
     {
       pattern: /;[^\r\n]*/,
@@ -110,9 +123,10 @@ var bnf = {
       greedy: true
     }
   ],
-  // Production rule header: `<name> ::=`
-  rule: {
+  // Rule header with angle brackets: `<n> ::=`
+  "rule-angle": {
     pattern: /<[^<>\r\n]+>(?=[ \t]*::=)/,
+    alias: "rule",
     inside: {
       punctuation: /[<>]/,
       "entity-name": {
@@ -121,17 +135,15 @@ var bnf = {
       }
     }
   },
-  // Assignment operator `::=` (some dialects use `:=`)
-  operator: /::=|:=|\|/,
-  // Non-terminal reference: `<name>`
-  "non-terminal": {
-    pattern: /<[^<>\r\n]+>/,
-    alias: "variable",
-    inside: {
-      punctuation: /[<>]/
-    }
+  // Rule header without angle brackets: `E ::=` (metavariable form).
+  "rule-meta": {
+    pattern: RULE_META_RE,
+    lookbehind: true,
+    alias: ["rule", "metavar"]
   },
-  // Terminal string
+  // Assignment and alternation operators.
+  operator: /::=|:=|\|/,
+  // Terminal string literal.
   string: [
     {
       pattern: /"[^"\r\n]*"/,
@@ -141,7 +153,26 @@ var bnf = {
       pattern: /'[^'\r\n]*'/,
       greedy: true
     }
-  ]
+  ],
+  // Non-terminal reference with angle brackets.
+  "non-terminal": {
+    pattern: /<[^<>\r\n]+>/,
+    alias: "variable",
+    inside: {
+      punctuation: /[<>]/
+    }
+  },
+  // *** Order matters below: keyword BEFORE metavar. ***
+  // Multi-letter bare words (true, false, if, then, else, let, in, …).
+  keyword: KEYWORD_RE,
+  // Single-letter metavariable reference on the RHS.
+  metavar: {
+    pattern: METAVAR_RE,
+    alias: "variable"
+  },
+  // Syntactic punctuation used in constructor-style rules:
+  // `(`, `)`, `:`, `,`, `=` inside `let (x : T) = E in E`, plus `.` etc.
+  punctuation: /[()\[\]{}:,.=]/
 };
 
 // src/grammars/ebnf.ts

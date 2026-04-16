@@ -132,3 +132,21 @@
 .language-bnf .token.rule .token.punctuation {
 	color: var(--text-faint);
 }
+
+/* ---------- BNF metavariable treatment ----------
+ * Single-letter metavariables (T, E, n, x, 𝔹, …) get bold + a distinct
+ * color so they read clearly against bare-word terminals (`true`, `if`,
+ * `let`, …). This also applies on the LHS of a rule via the `metavar`
+ * alias that `rule-meta` carries.
+ */
+.language-bnf .token.metavar {
+	color: var(--color-blue);
+	font-weight: 700;
+}
+
+/* Bare-word terminals sit in the normal text color so they visually
+ * recede relative to metavariables and operators. */
+.language-bnf .token.keyword {
+	color: var(--text-normal);
+	font-weight: normal;
+}
