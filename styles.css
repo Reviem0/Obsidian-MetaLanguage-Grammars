@@ -18,8 +18,8 @@
 .language-bnf  .token.rule,
 .language-ebnf .token.rule,
 .language-lbnf .token.label {
-	color: var(--color-purple);
-	font-weight: 600;
+	color: var(--meta-color-entity, var(--color-purple)) !important;
+	font-weight: 600 !important;
 }
 
 /* References to rules (RHS usage). */
@@ -28,21 +28,24 @@
 .language-ebnf .token.reference,
 .language-lbnf .token.reference,
 .language-lbnf .token.non-terminal {
-	color: var(--color-blue);
+	color: var(--meta-color-reference, var(--color-blue)) !important;
 }
 
-.language-lbnf .token.non-terminal .token.number {
-	color: var(--text-faint);
-	font-weight: normal;
+.language-lbnf .token.non-terminal .token.number,
+.language-lbnf .token.non-terminal.token.number {
+	color: var(--meta-color-faint, var(--text-faint)) !important;
+	font-weight: normal !important;
 }
 
-/* Core / built-in categories (ABNF core rules, LBNF built-ins). */
+/* Core / built-in categories (ABNF core rules, BNF builtins, LBNF built-ins). */
 .language-abnf .token.core-rule,
 .language-abnf .token.constant,
+.language-bnf  .token.builtin,
+.language-bnf  .token.constant,
 .language-lbnf .token.builtin-category,
 .language-lbnf .token.constant {
-	color: var(--color-cyan);
-	font-weight: 500;
+	color: var(--meta-color-constant, var(--color-cyan)) !important;
+	font-weight: 500 !important;
 }
 
 /* Numeric terminals and quantifiers. */
@@ -51,21 +54,24 @@
 .language-bnf  .token.number,
 .language-ebnf .token.number,
 .language-lbnf .token.number {
-	color: var(--color-orange);
+	color: var(--meta-color-number, var(--color-orange)) !important;
 }
 
 .language-abnf .token.terminal .token.punctuation,
-.language-abnf .token.terminal .token.keyword {
-	color: var(--color-red);
+.language-abnf .token.terminal.token.punctuation,
+.language-abnf .token.terminal .token.keyword,
+.language-abnf .token.terminal.token.keyword {
+	color: var(--meta-color-operator-alt, var(--color-red)) !important;
 }
 
-.language-abnf .token.terminal .token.number {
-	color: var(--color-orange);
+.language-abnf .token.terminal .token.number,
+.language-abnf .token.terminal.token.number {
+	color: var(--meta-color-number, var(--color-orange)) !important;
 }
 
 .language-abnf .token.quantifier {
-	color: var(--color-red);
-	font-weight: 600;
+	color: var(--meta-color-operator-alt, var(--color-red)) !important;
+	font-weight: 600 !important;
 }
 
 /* Literal strings. */
@@ -73,25 +79,25 @@
 .language-bnf  .token.string,
 .language-ebnf .token.string,
 .language-lbnf .token.string {
-	color: var(--color-green);
+	color: var(--meta-color-string, var(--color-green)) !important;
 }
 
 /* ABNF case-sensitive string prefix %s"…" gets a subtle tag. */
 .language-abnf .token.string.string-sensitive {
-	color: var(--color-green);
-	font-style: italic;
+	color: var(--meta-color-string, var(--color-green)) !important;
+	font-style: italic !important;
 }
 
 /* ABNF prose <free text>. */
 .language-abnf .token.prose {
-	color: var(--color-yellow);
-	font-style: italic;
+	color: var(--meta-color-prose, var(--color-yellow)) !important;
+	font-style: italic !important;
 }
 
 /* EBNF ? special sequence ?. */
 .language-ebnf .token.special-sequence {
-	color: var(--color-yellow);
-	font-style: italic;
+	color: var(--meta-color-prose, var(--color-yellow)) !important;
+	font-style: italic !important;
 }
 
 /* Operators — assignment, alternation, concat, exception. */
@@ -99,8 +105,8 @@
 .language-bnf  .token.operator,
 .language-ebnf .token.operator,
 .language-lbnf .token.operator {
-	color: var(--color-pink);
-	font-weight: 500;
+	color: var(--meta-color-operator, var(--color-pink)) !important;
+	font-weight: 500 !important;
 }
 
 /* Comments. */
@@ -108,8 +114,8 @@
 .language-bnf  .token.comment,
 .language-ebnf .token.comment,
 .language-lbnf .token.comment {
-	color: var(--text-muted);
-	font-style: italic;
+	color: var(--meta-color-comment, var(--text-muted)) !important;
+	font-style: italic !important;
 }
 
 /* Brackets / parens / braces stay subtle — Obsidian's default is fine,
@@ -118,19 +124,21 @@
 .language-bnf  .token.punctuation,
 .language-ebnf .token.punctuation,
 .language-lbnf .token.punctuation {
-	color: var(--text-muted);
+	color: var(--meta-color-punctuation, var(--text-muted)) !important;
 }
 
 /* LBNF pragma keywords. */
 .language-lbnf .token.keyword {
-	color: var(--color-red);
-	font-weight: 600;
+	color: var(--meta-color-operator-alt, var(--color-red)) !important;
+	font-weight: 600 !important;
 }
 
 /* BNF's angle brackets around non-terminals shouldn't disappear entirely. */
 .language-bnf .token.non-terminal .token.punctuation,
-.language-bnf .token.rule .token.punctuation {
-	color: var(--text-faint);
+.language-bnf .token.non-terminal.token.punctuation,
+.language-bnf .token.rule .token.punctuation,
+.language-bnf .token.rule.token.punctuation {
+	color: var(--meta-color-faint, var(--text-faint)) !important;
 }
 
 /* ---------- BNF metavariable treatment ----------
@@ -140,13 +148,17 @@
  * alias that `rule-meta` carries.
  */
 .language-bnf .token.metavar {
-	color: var(--color-blue);
-	font-weight: 700;
+	color: var(--meta-color-metavar, var(--color-blue)) !important;
+	font-weight: 700 !important;
+}
+
+.language-bnf .token.rule {
+	color: var(--meta-color-entity, var(--color-purple)) !important;
 }
 
 /* Bare-word terminals sit in the normal text color so they visually
  * recede relative to metavariables and operators. */
 .language-bnf .token.keyword {
-	color: var(--text-normal);
-	font-weight: normal;
+	color: var(--text-normal) !important;
+	font-weight: normal !important;
 }

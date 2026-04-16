@@ -29,6 +29,9 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
+var import_view = require("@codemirror/view");
+var import_state = require("@codemirror/state");
+var import_language = require("@codemirror/language");
 
 // src/grammars/abnf.ts
 var CORE_RULES = /\b(?<!-)(?:ALPHA|BIT|CHAR|CRLF|CR|CTL|DIGIT|DQUOTE|HEXDIG|HTAB|LF|LWSP|OCTET|SP|VCHAR|WSP)\b(?!-)/;
@@ -110,6 +113,10 @@ var KEYWORD_RE = new RegExp(
   `${META_CLASS}(?:${META_CLASS}|[0-9_\\-]){1,}`,
   "u"
 );
+var BNF_BUILTIN_RE = new RegExp(
+  "[\\u2102\\u210D\\u2115\\u2119\\u211A\\u211D\\u2124\\u{1D538}-\\u{1D56B}\\u{1D7D8}-\\u{1D7E1}]" + META_SUFFIX,
+  "u"
+);
 var bnf = {
   // Line comments: `;` (traditional) and `//` (common in modern dialects).
   comment: [
@@ -162,7 +169,12 @@ var bnf = {
       punctuation: /[<>]/
     }
   },
-  // *** Order matters below: keyword BEFORE metavar. ***
+  // *** Order matters below: builtin BEFORE keyword BEFORE metavar. ***
+  // Double-struck (blackboard bold) characters: ℕ, 𝔹, ℤ, ℝ, ℂ, etc.
+  builtin: {
+    pattern: BNF_BUILTIN_RE,
+    alias: "constant"
+  },
   // Multi-letter bare words (true, false, if, then, else, let, in, …).
   keyword: KEYWORD_RE,
   // Single-letter metavariable reference on the RHS.
@@ -279,6 +291,187 @@ var GRAMMARS = [
   { id: "ebnf", aliases: ["iso-ebnf", "iso14977"], grammar: ebnf },
   { id: "lbnf", aliases: ["bnfc", "labelled-bnf"], grammar: lbnf }
 ];
+
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function tokensToHtml(tokens, parentClasses) {
+    let html = '';
+    for (const token of tokens) {
+        if (typeof token === 'string') {
+            if (parentClasses.length > 0 && token.length > 0) {
+                html += `<span class="${escapeHtml(parentClasses.join(' '))}">${escapeHtml(token)}</span>`;
+            } else {
+                html += escapeHtml(token);
+            }
+        } else {
+            let classes = ['token', token.type];
+            if (token.alias) {
+                if (Array.isArray(token.alias)) classes.push(...token.alias);
+                else classes.push(token.alias);
+            }
+            const allClasses = [...parentClasses, ...classes];
+            if (Array.isArray(token.content)) {
+                html += tokensToHtml(token.content, allClasses);
+            } else if (typeof token.content === 'string') {
+                html += `<span class="${escapeHtml(allClasses.join(' '))}">${escapeHtml(token.content)}</span>`;
+            } else if (token.content) {
+                html += tokensToHtml([token.content], allClasses);
+            }
+        }
+    }
+    return html;
+}
+
+function extractBnfRuleNames(source) {
+    var rules = new Set();
+    // Match angle-bracket rules: <name> ::=
+    var m;
+    var re1 = /<([^<>\r\n]+)>\s*::?=/g;
+    while ((m = re1.exec(source)) !== null) {
+        rules.add(m[1].trim());
+    }
+    // Match bare single-letter meta rules: T ::= or E ::=
+    var re2 = new RegExp("(?:^|\\n)[ \\t]*(" + META_CLASS + META_SUFFIX + ")(?=[ \\t]*::?=)", "gu");
+    while ((m = re2.exec(source)) !== null) {
+        rules.add(m[1]);
+    }
+    return rules;
+}
+
+function reclassifyBnfTokens(tokens, ruleNames) {
+    for (var i = 0; i < tokens.length; i++) {
+        var token = tokens[i];
+        if (typeof token === 'string') continue;
+        if (token.type === 'metavar') {
+            var text = typeof token.content === 'string' ? token.content : '';
+            if (!ruleNames.has(text)) {
+                token.type = 'keyword';
+                token.alias = undefined;
+            }
+        }
+        if (Array.isArray(token.content)) {
+            reclassifyBnfTokens(token.content, ruleNames);
+        } else if (token.content && typeof token.content !== 'string') {
+            reclassifyBnfTokens([token.content], ruleNames);
+        }
+    }
+}
+
+function buildDecorations(view) {
+    const Prism = window.Prism;
+    if (!Prism) return import_view.Decoration.none;
+
+    const docStr = view.state.doc.toString();
+    const doc = view.state.doc;
+    const decos = [];
+    const visibleRanges = view.visibleRanges;
+
+    const ALL_LANGS = [];
+    for (const g of GRAMMARS) {
+        ALL_LANGS.push(g.id, ...g.aliases);
+    }
+    const langRegexPart = ALL_LANGS.join("|");
+    const regex = new RegExp(`(^|\\n)\`\`\`(${langRegexPart})([ \\t]*\\r?\\n)([\\s\\S]*?)(?:\\n[ \\t]*\`\`\`|$)`, "g");
+
+    let match;
+    while ((match = regex.exec(docStr)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+
+        let isVisible = false;
+        for (const r of visibleRanges) {
+            if (r.from <= end && r.to >= start) {
+                isVisible = true;
+                break;
+            }
+        }
+        if (!isVisible) continue;
+
+        const langStr = match[2];
+        const code = match[4];
+        const codeStart = match.index + match[1].length + 3 + langStr.length + match[3].length;
+
+        let entry = null;
+        for (const g of GRAMMARS) {
+            if (g.id === langStr || g.aliases.includes(langStr)) {
+                entry = g;
+                break;
+            }
+        }
+        if (!entry) continue;
+
+        const startLine = doc.lineAt(codeStart).number;
+        const endLine = Math.min(doc.lineAt(codeStart + code.length).number, doc.lines);
+        for (let l = startLine; l <= endLine; l++) {
+            const line = doc.line(l);
+            const lineDeco = import_view.Decoration.line({ attributes: { class: "language-" + entry.id } });
+            decos.push(lineDeco.range(line.from));
+        }
+
+        try {
+            const tokens = Prism.tokenize(code, entry.grammar);
+            if (entry.id === 'bnf') {
+                const ruleNames = extractBnfRuleNames(code);
+                reclassifyBnfTokens(tokens, ruleNames);
+            }
+
+            const flattenTokens = (tArr, offset, parentClasses) => {
+                for (const token of tArr) {
+                    if (typeof token === 'string') {
+                        if (parentClasses.length > 0 && token.length > 0) {
+                            const mark = import_view.Decoration.mark({ class: parentClasses.join(" ") });
+                            decos.push(mark.range(offset, offset + token.length));
+                        }
+                        offset += token.length;
+                    } else {
+                        const tokenLength = token.length;
+                        let classes = ['token', token.type];
+                        if (token.alias) {
+                            if (Array.isArray(token.alias)) {
+                                classes.push(...token.alias);
+                            } else {
+                                classes.push(token.alias);
+                            }
+                        }
+                        const allClasses = [...parentClasses, ...classes];
+
+                        if (Array.isArray(token.content)) {
+                            flattenTokens(token.content, offset, allClasses);
+                        } else if (typeof token.content === "string") {
+                            if (tokenLength > 0) {
+                                const mark = import_view.Decoration.mark({ class: allClasses.join(" ") });
+                                decos.push(mark.range(offset, offset + tokenLength));
+                            }
+                        } else if (token.content) {
+                            flattenTokens([token.content], offset, allClasses);
+                        }
+                        offset += tokenLength;
+                    }
+                }
+            };
+
+            flattenTokens(tokens, codeStart, []);
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    return import_view.Decoration.set(decos, true);
+}
+
+const LIVE_PREVIEW_PLUGIN = import_view.ViewPlugin.fromClass(class {
+    constructor(view) {
+        this.decorations = buildDecorations(view);
+    }
+    update(update) {
+        if (update.docChanged || update.viewportChanged) {
+            this.decorations = buildDecorations(update.view);
+        }
+    }
+}, { decorations: v => v.decorations });
+
 var MetalanguageGrammarsPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -286,6 +479,9 @@ var MetalanguageGrammarsPlugin = class extends import_obsidian.Plugin {
     this.registered = [];
   }
   async onload() {
+    await this.loadSettings();
+    this.addSettingTab(new MetalanguageSettingTab(this.app, this));
+    this.updateStyles();
     this.registerPrismGrammars();
     for (const entry of GRAMMARS) {
       for (const lang of [entry.id, ...entry.aliases]) {
@@ -295,8 +491,11 @@ var MetalanguageGrammarsPlugin = class extends import_obsidian.Plugin {
         );
       }
     }
+    this.registerEditorExtension(LIVE_PREVIEW_PLUGIN);
   }
   onunload() {
+    const styleEl = document.getElementById("metalanguage-custom-styles");
+    if (styleEl) styleEl.remove();
     const Prism = window.Prism;
     if (!Prism)
       return;
@@ -330,10 +529,112 @@ var MetalanguageGrammarsPlugin = class extends import_obsidian.Plugin {
     const pre = el.createEl("pre", { cls: `language-${entry.id}` });
     const code = pre.createEl("code", { cls: `language-${entry.id}` });
     const Prism = window.Prism;
-    if (Prism && Prism.highlight) {
-      code.innerHTML = Prism.highlight(source, entry.grammar, entry.id);
+    if (Prism && Prism.tokenize) {
+      const tokens = Prism.tokenize(source, entry.grammar);
+      if (entry.id === 'bnf') {
+          const ruleNames = extractBnfRuleNames(source);
+          reclassifyBnfTokens(tokens, ruleNames);
+      }
+      code.innerHTML = tokensToHtml(tokens, []);
     } else {
       code.setText(source);
     }
   }
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
+    this.updateStyles();
+  }
+  updateStyles() {
+    let styleEl = document.getElementById("metalanguage-custom-styles");
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = "metalanguage-custom-styles";
+      document.head.appendChild(styleEl);
+    }
+    const s = this.settings;
+    const bodyStyles = `
+      body {
+        ${s.colorEntity ? `--meta-color-entity: ${s.colorEntity};` : ""}
+        ${s.colorReference ? `--meta-color-reference: ${s.colorReference};` : ""}
+        ${s.colorFaint ? `--meta-color-faint: ${s.colorFaint};` : ""}
+        ${s.colorConstant ? `--meta-color-constant: ${s.colorConstant};` : ""}
+        ${s.colorNumber ? `--meta-color-number: ${s.colorNumber};` : ""}
+        ${s.colorOperatorAlt ? `--meta-color-operator-alt: ${s.colorOperatorAlt};` : ""}
+        ${s.colorString ? `--meta-color-string: ${s.colorString};` : ""}
+        ${s.colorProse ? `--meta-color-prose: ${s.colorProse};` : ""}
+        ${s.colorOperator ? `--meta-color-operator: ${s.colorOperator};` : ""}
+        ${s.colorComment ? `--meta-color-comment: ${s.colorComment};` : ""}
+        ${s.colorPunctuation ? `--meta-color-punctuation: ${s.colorPunctuation};` : ""}
+        ${s.colorMetavar ? `--meta-color-metavar: ${s.colorMetavar};` : ""}
+      }
+    `;
+    styleEl.textContent = bodyStyles;
+  }
 };
+
+const DEFAULT_SETTINGS = {
+  colorEntity: "#a882ff",
+  colorReference: "#4d93ff",
+  colorFaint: "#6e6e6e",
+  colorConstant: "#00b8d4",
+  colorNumber: "#ff9100",
+  colorOperatorAlt: "#ff5252",
+  colorString: "#00e676",
+  colorProse: "#ffd600",
+  colorOperator: "#ff4081",
+  colorComment: "#6e6e6e",
+  colorPunctuation: "#6e6e6e",
+  colorMetavar: "#4d93ff"
+};
+
+class MetalanguageSettingTab extends import_obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Metalanguage Grammars Settings" });
+
+    const createColorSetting = (name, desc, key) => {
+      new import_obsidian.Setting(containerEl)
+        .setName(name)
+        .setDesc(desc)
+        .addColorPicker((color) =>
+          color
+            .setValue(this.plugin.settings[key] || DEFAULT_SETTINGS[key])
+            .onChange(async (value) => {
+              this.plugin.settings[key] = value;
+              await this.plugin.saveSettings();
+            })
+        )
+        .addExtraButton((button) =>
+          button
+            .setIcon("reset")
+            .setTooltip("Restore default")
+            .onClick(async () => {
+              this.plugin.settings[key] = DEFAULT_SETTINGS[key];
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        );
+    };
+
+    createColorSetting("Rule Name (Entity)", "Color for LHS rules.", "colorEntity");
+    createColorSetting("Rule Reference", "Color for RHS non-terminals.", "colorReference");
+    createColorSetting("Faint Elements", "Color for brackets/numbers in certain references.", "colorFaint");
+    createColorSetting("Constant / Built-in", "Color for core rules and builtin categories.", "colorConstant");
+    createColorSetting("Number", "Color for numeric terminals.", "colorNumber");
+    createColorSetting("Operator (Alternative) / Keyword", "Color for quantifiers, pragmas, string prefixes.", "colorOperatorAlt");
+    createColorSetting("String", "Color for literal strings.", "colorString");
+    createColorSetting("Prose / Special Sequence", "Color for free-form prose and special sequences.", "colorProse");
+    createColorSetting("Operator", "Color for assignment, alternation, concatenation.", "colorOperator");
+    createColorSetting("Comment", "Color for comments.", "colorComment");
+    createColorSetting("Punctuation", "Color for generic punctuation.", "colorPunctuation");
+    createColorSetting("Metavariable", "Color for single-letter metavariables (BNF).", "colorMetavar");
+  }
+}
